@@ -1,5 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// ══════════════════════════════════════════════════════════════════════
+//  USER DOCUMENT MODEL
+//  Stores documents uploaded by admin to a specific user's collection.
+//  These appear in the user's Documents screen.
+//
+//  FIX: toJson() wraps createdAt in Timestamp.fromDate() so Firestore
+//  doesn't throw [invalid-argument] error.
+// ══════════════════════════════════════════════════════════════════════
 class UserDocument {
   final String id;
   final String userId;
@@ -19,10 +27,9 @@ class UserDocument {
     required this.createdAt,
   });
 
-  /// 🔥 Firestore factory
+  // ── From Firestore ─────────────────────────────────────────────
   factory UserDocument.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-
     return UserDocument(
       id: doc.id,
       userId: data['userId'] ?? '',
@@ -36,14 +43,13 @@ class UserDocument {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'userId': userId,
-      'requestId': requestId,
-      'fileUrl': fileUrl,
-      'type': type,
-      'title': title,
-      'createdAt': createdAt,
-    };
-  }
+  // ── To Firestore — DateTime wrapped in Timestamp ───────────────
+  Map<String, dynamic> toJson() => {
+    'userId': userId,
+    'requestId': requestId,
+    'fileUrl': fileUrl,
+    'type': type,
+    'title': title,
+    'createdAt': Timestamp.fromDate(createdAt),
+  };
 }

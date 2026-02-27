@@ -4,12 +4,20 @@ import 'package:admin_app/themes/app_theme.dart';
 import 'package:admin_app/themes/app_widgets.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../data/models/app_user.dart';
 import '../../../data/models/hotel_request.dart';
 import 'membership_allocation_screen.dart';
 import 'upload_document_screen.dart';
 
+// ══════════════════════════════════════════════════════════════════════
+//  ADMIN USER DETAIL SCREEN
+//  • Compact info card (no big boxes)
+//  • Services as a list with name + basic status badge → tap to full detail
+//  • Hotel request cards with approve + upload doc button
+//  • Admin can upload doc → shows in user's Documents screen
+// ══════════════════════════════════════════════════════════════════════
 class AdminUserDetailScreen extends StatefulWidget {
   final String userId;
   const AdminUserDetailScreen({super.key, required this.userId});
@@ -19,31 +27,23 @@ class AdminUserDetailScreen extends StatefulWidget {
 }
 
 class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
-  final TextEditingController _holidayController = TextEditingController();
-
-  @override
-  void dispose() {
-    _holidayController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("User Details"),
+        title: const Text('Member Details'),
         backgroundColor: AppColors.surface,
+        elevation: 0,
       ),
       body: StreamBuilder<AppUser?>(
         stream: FirestoreService.instance.streamUser(widget.userId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting)
             return const AppLoadingIndicator();
-          }
           if (!snapshot.hasData || snapshot.data == null) {
             return Center(
-              child: Text("User not found", style: AppTextStyles.bodyMedium),
+              child: Text('User not found', style: AppTextStyles.bodyMedium),
             );
           }
 
@@ -54,62 +54,33 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Not logged in warning
+                // ── Not logged in warning ─────────────────────────
                 if (user.firebaseUid == null)
                   _WarningBanner(
                     message:
-                        "User has not logged in yet — Firebase UID not generated.",
+                        'User has not logged in yet — Firebase UID not generated.',
                   ),
 
-                // Basic info
-                const SizedBox(height: 4),
-                _SectionTitle(title: "Basic Information"),
-                AppCard(
-                  child: Column(
-                    children: [
-                      _InfoRow(
-                        label: "Custom UID",
-                        value: user.customUid ?? "—",
-                      ),
-                      _InfoRow(
-                        label: "Firebase UID",
-                        value: user.firebaseUid ?? "Not linked",
-                      ),
-                      _InfoRow(
-                        label: "Name",
-                        value: user.name.isEmpty ? "—" : user.name,
-                      ),
-                      _InfoRow(
-                        label: "Email",
-                        value: user.email.isEmpty ? "—" : user.email,
-                      ),
-                      _InfoRow(label: "Phone", value: user.phone ?? "—"),
-                      _InfoRow(
-                        label: "Role",
-                        value: user.role ?? "user",
-                        isLast: true,
-                      ),
-                    ],
-                  ),
-                ),
+                // ── Member profile card ───────────────────────────
+                _ProfileCard(user: user),
+                const SizedBox(height: 20),
 
-                const SizedBox(height: 24),
-
-                // Membership section
-                _SectionTitle(title: "Membership"),
+                // ── Membership ────────────────────────────────────
+                const _SectionLabel('Membership'),
+                const SizedBox(height: 10),
                 _MembershipSection(user: user, isAdmin: true),
-
                 const SizedBox(height: 24),
 
-                // Hotel Requests
-                _SectionTitle(title: "Hotel Requests"),
+                // ── Holiday & Hotel Requests ──────────────────────
+                const _SectionLabel('Holiday & Hotel Requests'),
+                const SizedBox(height: 10),
                 _HotelRequestsSection(user: user),
-
                 const SizedBox(height: 24),
 
-                // Service Requests
-                _SectionTitle(title: "Service Requests"),
-                _ServiceRequestsGrid(user: user),
+                // ── Service Requests list ─────────────────────────
+                const _SectionLabel('Service Requests'),
+                const SizedBox(height: 10),
+                _ServiceRequestsList(user: user),
               ],
             ),
           );
@@ -119,52 +90,227 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   }
 }
 
-// ─── Warning Banner ──────────────────────────
-class _WarningBanner extends StatelessWidget {
-  final String message;
-  const _WarningBanner({required this.message});
+// ── Profile card ──────────────────────────────────────────────────
+class _ProfileCard extends StatelessWidget {
+  final AppUser user;
+  const _ProfileCard({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.12),
-        borderRadius: AppRadius.medium,
-        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
-      ),
-      child: Row(
+    return AppCard(
+      child: Column(
         children: [
-          Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 20),
-          const SizedBox(width: 10),
-          Expanded(child: Text(message, style: AppTextStyles.bodySmall)),
+          // Avatar + name row
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: AppColors.memberGradient,
+                  ),
+                  borderRadius: AppRadius.medium,
+                ),
+                child: Center(
+                  child: Text(
+                    (user.name.isNotEmpty ? user.name[0] : '?').toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name.isNotEmpty ? user.name : 'Unknown',
+                      style: AppTextStyles.headingSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySurface,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            user.customUid ?? '—',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Status badge
+              AppChip(
+                label: user.membershipActive == true ? 'ACTIVE' : 'INACTIVE',
+                bgColor: user.membershipActive == true
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.warning.withOpacity(0.1),
+                textColor: user.membershipActive == true
+                    ? AppColors.success
+                    : AppColors.warning,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+          const Divider(color: AppColors.divider, height: 1),
+          const SizedBox(height: 14),
+
+          // Info rows
+          _IRow(icon: Icons.phone_outlined, label: user.phone ?? '—'),
+          _IRow(
+            icon: Icons.email_outlined,
+            label: user.email.isNotEmpty ? user.email : '—',
+          ),
+          _IRow(
+            icon: Icons.badge_outlined,
+            label: user.firebaseUid ?? 'Not linked yet',
+          ),
+          _IRow(
+            icon: Icons.manage_accounts_rounded,
+            label: user.role ?? 'user',
+            isLast: true,
+          ),
         ],
       ),
     );
   }
 }
 
-// ─── Section Title ───────────────────────────
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle({required this.title});
+class _IRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isLast;
+  const _IRow({required this.icon, required this.label, this.isLast = false});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: AppTextStyles.headingSmall),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.textSecondary, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Info Row ────────────────────────────────
+// ── Warning banner ────────────────────────────────────────────────
+class _WarningBanner extends StatelessWidget {
+  final String message;
+  const _WarningBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.warning.withOpacity(0.1),
+      borderRadius: AppRadius.medium,
+      border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+    ),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.warning_amber_rounded,
+          color: AppColors.warning,
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message, style: AppTextStyles.bodySmall)),
+      ],
+    ),
+  );
+}
+
+// ── Section label ─────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 3,
+        height: 18,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Text(
+        text.toUpperCase(),
+        style: AppTextStyles.labelUppercase.copyWith(
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    ],
+  );
+}
+
+// ── Status chip ───────────────────────────────────────────────────
+class _StatusChip extends StatelessWidget {
+  final String status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color bg, text;
+    switch (status) {
+      case 'approved':
+        bg = AppColors.success.withOpacity(0.12);
+        text = AppColors.success;
+        break;
+      case 'rejected':
+        bg = AppColors.error.withOpacity(0.12);
+        text = AppColors.error;
+        break;
+      default:
+        bg = AppColors.warning.withOpacity(0.12);
+        text = AppColors.warning;
+    }
+    return AppChip(label: status.toUpperCase(), bgColor: bg, textColor: text);
+  }
+}
+
+// ── Info row ──────────────────────────────────────────────────────
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isLast;
-
   const _InfoRow({
     required this.label,
     required this.value,
@@ -172,37 +318,34 @@ class _InfoRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 110,
-                child: Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+  Widget build(BuildContext context) => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
-              Expanded(child: Text(value, style: AppTextStyles.bodyLarge)),
-            ],
-          ),
+            ),
+            Expanded(child: Text(value, style: AppTextStyles.bodyLarge)),
+          ],
         ),
-        if (!isLast) const Divider(height: 1, color: AppColors.divider),
-      ],
-    );
-  }
+      ),
+      if (!isLast) const Divider(height: 1, color: AppColors.divider),
+    ],
+  );
 }
 
-// ─── Membership Section ──────────────────────
+// ── Membership section (preserved from original) ──────────────────
 class _MembershipSection extends StatelessWidget {
   final AppUser user;
-  final bool isAdmin; // ← add this
-
+  final bool isAdmin;
   const _MembershipSection({required this.user, required this.isAdmin});
 
   @override
@@ -212,66 +355,91 @@ class _MembershipSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// ─── HEADER ─────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  user.membershipName ?? "Premium",
+                  user.membershipName ?? 'Premium',
                   style: AppTextStyles.headingSmall,
                 ),
                 AppChip(
-                  label: "ACTIVE",
+                  label: 'ACTIVE',
                   bgColor: AppColors.success.withOpacity(0.12),
                   textColor: AppColors.success,
                 ),
               ],
             ),
-
             if (user.expiryDate != null) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
-                "Expires: ${user.expiryDate!.toLocal().toString().split(' ')[0]}",
+                'Expires: ${user.expiryDate!.toLocal().toString().split(' ')[0]}',
                 style: AppTextStyles.bodySmall,
               ),
             ],
-
             const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 14),
-
-            /// ─── FACILITIES TITLE ─────────────────────
-            Text("Facilities", style: AppTextStyles.labelUppercase),
-            const SizedBox(height: 10),
-
-            /// ─── IMMUNITIES LIST ─────────────────────
+            Text('Facilities', style: AppTextStyles.labelUppercase),
+            const SizedBox(height: 8),
             ...[
-              ("Insurance", user.immunities["Insurance"] ?? false),
-              ("Gym Access", user.immunities["gym"] ?? false),
-              ("Swimming Pool", user.immunities["swimmingPool"] ?? false),
-              ("Event Pass", user.immunities["eventpass"] ?? false),
-              ("Resort Pass", user.immunities["resortAccess"] ?? false),
-              ("Banquet Hall", user.immunities["banquetAccess"] ?? false),
-              ("Plot", user.immunities["complimentPlot"] ?? false),
-            ].map((entry) => _FacilityRow(title: entry.$1, enabled: entry.$2)),
-
-            /// ─── ADMIN EDIT BUTTON ─────────────────────
-            if (isAdmin) ...[
-              const SizedBox(height: 18),
-              AppButton(
-                label: "Edit Immunities",
-
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EditImmunitiesScreen(user: user),
-
-                      // userId: user.id,
-                      // currentImmunities: user.immunities,
+              ('Insurance', user.immunities['Insurance'] ?? false),
+              ('Gym Access', user.immunities['gym'] ?? false),
+              ('Swimming Pool', user.immunities['swimmingPool'] ?? false),
+              ('Event Pass', user.immunities['eventpass'] ?? false),
+              ('Resort Pass', user.immunities['resortAccess'] ?? false),
+              ('Banquet Hall', user.immunities['banquetAccess'] ?? false),
+              ('Plot', user.immunities['complimentPlot'] ?? false),
+            ].map(
+              (e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  children: [
+                    Icon(
+                      e.$2 ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                      color: e.$2 ? AppColors.success : AppColors.border,
+                      size: 18,
                     ),
-                  );
-                },
+                    const SizedBox(width: 10),
+                    Text(e.$1, style: AppTextStyles.bodyMedium),
+                  ],
+                ),
+              ),
+            ),
+
+            // Holiday balance
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Icon(
+                  Icons.beach_access_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text('Holiday Balance', style: AppTextStyles.labelMedium),
+                const Spacer(),
+                Text(
+                  '${user.remainingHolidays ?? 0} / ${user.totalHolidays ?? 0} days',
+                  style: AppTextStyles.headingSmall.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+
+            if (isAdmin) ...[
+              const SizedBox(height: 16),
+              AppButton(
+                label: 'Edit Immunities',
+                height: 42,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditImmunitiesScreen(user: user),
+                  ),
+                ),
               ),
             ],
           ],
@@ -279,7 +447,6 @@ class _MembershipSection extends StatelessWidget {
       );
     }
 
-    /// ─── NO MEMBERSHIP CARD ─────────────────────
     return AppCard(
       child: Column(
         children: [
@@ -301,24 +468,23 @@ class _MembershipSection extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  "No Membership Allocated",
+                  'No Membership Allocated',
                   style: AppTextStyles.headingSmall,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-
           if (isAdmin)
             AppButton(
-              label: "Allocate Membership",
+              label: 'Allocate Membership',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => MembershipAllocationScreen(
                     userId: user.id,
-                    requestId: "manual_allocation",
-                    requestedPackage: "Manual Allocation",
+                    requestId: 'manual_allocation',
+                    requestedPackage: 'Manual Allocation',
                     packageRequestId: null,
                   ),
                 ),
@@ -330,269 +496,441 @@ class _MembershipSection extends StatelessWidget {
   }
 }
 
-class _FacilityRow extends StatelessWidget {
-  final String title;
-  final bool enabled;
-  const _FacilityRow({required this.title, required this.enabled});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(
-            enabled ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: enabled ? AppColors.success : AppColors.border,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Text(title, style: AppTextStyles.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Hotel Requests Section ──────────────────
+// ══════════════════════════════════════════════════════════════════
+//  HOTEL REQUESTS SECTION
+// ══════════════════════════════════════════════════════════════════
 class _HotelRequestsSection extends StatelessWidget {
   final AppUser user;
-
   const _HotelRequestsSection({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    /// 🔥 SAFETY CHECK
     if (user.firebaseUid == null || user.firebaseUid!.isEmpty) {
       return AppCard(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Text(
-          "Hotel requests unavailable — user has no Firebase UID.",
+          'No hotel requests — user has not logged in yet.',
           style: AppTextStyles.bodySmall.copyWith(fontStyle: FontStyle.italic),
         ),
       );
     }
 
-    /// ✅ USE FIREBASE UID (NOT user.id)
     return StreamBuilder<List<HotelRequest>>(
       stream: FirestoreService.instance.streamUserHotelRequests(
         user.firebaseUid!,
       ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(color: AppColors.primary),
           );
         }
-
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (!snap.hasData || snap.data!.isEmpty) {
           return AppCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text(
-              "No hotel requests yet.",
+              'No holiday/hotel requests yet.',
               style: AppTextStyles.bodySmall,
             ),
           );
         }
 
-        final requests = snapshot.data!;
-
         return Column(
-          children: requests.map((r) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    /// HEADER
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: snap.data!
+              .map(
+                (r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(r.location, style: AppTextStyles.headingSmall),
-                        _StatusChip(status: r.status),
-                      ],
-                    ),
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                r.location,
+                                style: AppTextStyles.headingSmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            _StatusChip(status: r.status),
+                          ],
+                        ),
+                        if (r.subDestination.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            r.subDestination,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
 
-                    const SizedBox(height: 10),
-                    const Divider(height: 1),
-                    const SizedBox(height: 10),
+                        // Details grid (compact)
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 6,
+                          children: [
+                            _DetailChip(
+                              icon: Icons.calendar_today_rounded,
+                              label:
+                                  '${r.checkIn.toString().split(' ')[0]} → ${r.checkOut.toString().split(' ')[0]}',
+                            ),
+                            _DetailChip(
+                              icon: Icons.nights_stay_outlined,
+                              label: '${r.nights} nights',
+                            ),
+                            _DetailChip(
+                              icon: Icons.group_rounded,
+                              label: '${r.members} travellers',
+                            ),
+                            _DetailChip(
+                              icon: Icons.flight_rounded,
+                              label: r.travelMode,
+                            ),
+                            if (r.memberName.isNotEmpty)
+                              _DetailChip(
+                                icon: Icons.person_outline_rounded,
+                                label: r.memberName,
+                              ),
+                            if (r.adults > 0)
+                              _DetailChip(
+                                icon: Icons.person_rounded,
+                                label: '${r.adults} adults, ${r.kids} kids',
+                              ),
+                          ],
+                        ),
 
-                    /// DETAILS
-                    _InfoRow(
-                      label: "Check-in",
-                      value: r.checkIn.toString().split(" ")[0],
-                    ),
-                    _InfoRow(
-                      label: "Check-out",
-                      value: r.checkOut.toString().split(" ")[0],
-                    ),
-                    _InfoRow(label: "Nights", value: r.nights.toString()),
-                    _InfoRow(label: "Members", value: r.members.toString()),
-                    _InfoRow(
-                      label: "Travel",
-                      value: r.travelMode,
-                      isLast: true,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    /// ACTION BUTTONS
-                    Row(
-                      children: [
-                        /// APPROVE BUTTON
-                        if (r.status == "pending")
-                          Expanded(
-                            child: AppButton(
-                              label: "Approve",
-                              height: 42,
-                              onTap: () async {
-                                await FirestoreService.instance
-                                    .updateHotelRequestStatus(r.id, "approved");
-                              },
-                              icon: const Icon(
-                                Icons.check_rounded,
-                                color: Colors.white,
-                                size: 16,
+                        // Aadhaar view
+                        if (r.aadharUrl != null) ...[
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: () async {
+                              final uri = Uri.parse(r.aadharUrl!);
+                              if (await canLaunchUrl(uri))
+                                await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySurface,
+                                borderRadius: AppRadius.small,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.file_open_rounded,
+                                    color: AppColors.primary,
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'View Aadhaar',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
+                        ],
 
-                        if (r.status == "pending") const SizedBox(width: 10),
+                        const SizedBox(height: 14),
 
-                        /// SEND PDF BUTTON
-                        Expanded(
-                          child: AppOutlinedButton(
-                            label: "Send PDF",
-                            icon: const Icon(
-                              Icons.upload_file_rounded,
-                              color: AppColors.primary,
-                              size: 16,
-                            ),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UploadUserDocumentScreen(
-                                  userId: user.firebaseUid!, // ✅ FIXED
-                                  requestId: r.id,
-                                  type: "hotel",
-                                  title: "Hotel Confirmation",
+                        // Actions
+                        Row(
+                          children: [
+                            if (r.status == 'pending')
+                              Expanded(
+                                child: AppButton(
+                                  label: 'Approve',
+                                  height: 40,
+                                  icon: const Icon(
+                                    Icons.check_rounded,
+                                    color: Colors.white,
+                                    size: 15,
+                                  ),
+                                  onTap: () async => FirestoreService.instance
+                                      .updateHotelRequestStatus(
+                                        r.id,
+                                        'approved',
+                                      ),
+                                ),
+                              ),
+                            if (r.status == 'pending') const SizedBox(width: 8),
+                            Expanded(
+                              child: AppOutlinedButton(
+                                label: 'Upload Doc',
+                                icon: const Icon(
+                                  Icons.upload_file_rounded,
+                                  color: AppColors.primary,
+                                  size: 15,
+                                ),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => UploadUserDocumentScreen(
+                                      userId: user.firebaseUid!,
+                                      requestId: r.id,
+                                      type: 'hotel',
+                                      title: 'Hotel Confirmation',
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
+              )
+              .toList(),
         );
       },
     );
   }
 }
 
-/// ─── Service Requests Grid ───────────────────
-class _ServiceRequestsGrid extends StatelessWidget {
-  final AppUser user;
-  const _ServiceRequestsGrid({required this.user});
+class _DetailChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _DetailChip({required this.icon, required this.label});
 
-  // MUST MATCH EXACTLY WITH serviceType IN FIRESTORE
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 13, color: AppColors.textSecondary),
+      const SizedBox(width: 4),
+      Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+      ),
+    ],
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SERVICE REQUESTS LIST
+//  Each service shows as a row with live pending count badge
+//  Tap → AdminServiceDetailScreen
+// ══════════════════════════════════════════════════════════════════
+class _ServiceRequestsList extends StatelessWidget {
+  final AppUser user;
+  const _ServiceRequestsList({required this.user});
+
   static const _services = [
-    {"title": "holiday", "icon": Icons.beach_access_rounded},
-    {"title": "swimming", "icon": Icons.pool_rounded},
-    {"title": "gym", "icon": Icons.fitness_center_rounded},
-    {"title": "resort pass", "icon": Icons.villa_rounded},
-    {"title": "event pass", "icon": Icons.event_available_rounded},
-    {"title": "banquet hall", "icon": Icons.church_rounded},
-    {"title": "insurance", "icon": Icons.shield_rounded},
+    {'title': 'swimming', 'label': 'Swimming Pool', 'icon': Icons.pool_rounded},
+    {'title': 'gym', 'label': 'Gym', 'icon': Icons.fitness_center_rounded},
+    {
+      'title': 'resortPass',
+      'label': 'Resort Pass',
+      'icon': Icons.villa_rounded,
+    },
+    {
+      'title': 'eventPass',
+      'label': 'Event Pass',
+      'icon': Icons.event_available_rounded,
+    },
+    {
+      'title': 'banquetHall',
+      'label': 'Banquet Hall',
+      'icon': Icons.church_rounded,
+    },
+    {'title': 'insurance', 'label': 'Insurance', 'icon': Icons.shield_rounded},
   ];
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _services.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.2,
-      ),
-      itemBuilder: (context, i) {
-        final s = _services[i];
-        final title = s["title"] as String;
-        final icon = s["icon"] as IconData;
+    if (user.firebaseUid == null) {
+      return AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Text(
+          'Service requests unavailable — user has no Firebase UID.',
+          style: AppTextStyles.bodySmall.copyWith(fontStyle: FontStyle.italic),
+        ),
+      );
+    }
 
-        return AppCard(
-          onTap: () {
-            if (user.firebaseUid == null) return;
+    return AppCard(
+      child: Column(
+        children: _services.asMap().entries.map((entry) {
+          final i = entry.key;
+          final svc = entry.value;
+          final title = svc['title'] as String;
+          final label = svc['label'] as String;
+          final icon = svc['icon'] as IconData;
+          final isLast = i == _services.length - 1;
 
-            Navigator.push(
+          return _ServiceRow(
+            userId: user.firebaseUid!,
+            serviceType: title,
+            label: label,
+            icon: icon,
+            isLast: isLast,
+            onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => AdminServiceDetailScreen(
                   userId: user.firebaseUid!,
-                  serviceType: title.toLowerCase().trim(),
+                  serviceType: title,
+                  userName: user.name,
                 ),
               ),
-            );
-          },
-          padding: EdgeInsets.zero,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySurface,
-                  borderRadius: AppRadius.medium,
-                ),
-                child: Icon(icon, color: AppColors.primary, size: 22),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title.toUpperCase(),
-                textAlign: TextAlign.center,
-                style: AppTextStyles.labelUppercase.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
-// ─── Status Chip ─────────────────────────────
-class _StatusChip extends StatelessWidget {
-  final String status;
-  const _StatusChip({required this.status});
+class _ServiceRow extends StatelessWidget {
+  final String userId;
+  final String serviceType;
+  final String label;
+  final IconData icon;
+  final bool isLast;
+  final VoidCallback onTap;
+  const _ServiceRow({
+    required this.userId,
+    required this.serviceType,
+    required this.label,
+    required this.icon,
+    required this.isLast,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    Color bg, text;
-    switch (status) {
-      case "approved":
-        bg = AppColors.success.withOpacity(0.12);
-        text = AppColors.success;
-        break;
-      case "rejected":
-        bg = AppColors.error.withOpacity(0.12);
-        text = AppColors.error;
-        break;
-      default:
-        bg = AppColors.warning.withOpacity(0.12);
-        text = AppColors.warning;
-    }
-    return AppChip(label: status.toUpperCase(), bgColor: bg, textColor: text);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('service_requests')
+          .where('userId', isEqualTo: userId)
+          .where('serviceType', isEqualTo: serviceType)
+          .snapshots(),
+      builder: (context, snap) {
+        final total = snap.data?.docs.length ?? 0;
+        final pending =
+            snap.data?.docs
+                .where((d) => (d.data() as Map)['status'] == 'pending')
+                .length ??
+            0;
+
+        return Column(
+          children: [
+            GestureDetector(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySurface,
+                        borderRadius: AppRadius.small,
+                      ),
+                      child: Icon(icon, color: AppColors.primary, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (total > 0)
+                            Text(
+                              '$total request${total == 1 ? '' : 's'}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          if (total == 0)
+                            Text(
+                              'No requests',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    // Pending badge
+                    if (pending > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '$pending pending',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    if (pending == 0 && total > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Done',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textHint,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (!isLast) const Divider(color: AppColors.divider, height: 1),
+          ],
+        );
+      },
+    );
   }
 }
