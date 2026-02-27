@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "104403552010",
+    "project_id": "adven-9689e",
+    "storage_bucket": "adven-9689e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104403552010:android:4c8ceb1d8ee71557dcdcf3",
+        "android_client_info": {
+          "package_name": "com.adven.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMhHpAh2zkBMPG-eCGnAIE--NYhqY-I_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104403552010:android:d63ffe1c7fcec1e9dcdcf3",
+        "android_client_info": {
+          "package_name": "com.adven.user"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "104403552010-b98if6l9c8auaflr0ortc5p53ggmecms.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.adven.user",
+            "certificate_hash": "536ee6da858f82920090877f0fd61949ce2738de"
+          }
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMhHpAh2zkBMPG-eCGnAIE--NYhqY-I_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104403552010:android:865a200bab0253bedcdcf3",
+        "android_client_info": {
+          "package_name": "com.example.adven"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMhHpAh2zkBMPG-eCGnAIE--NYhqY-I_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
