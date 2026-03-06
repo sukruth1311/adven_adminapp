@@ -2,16 +2,12 @@ import 'package:admin_app/themes/app_theme.dart';
 import 'package:admin_app/themes/app_widgets.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'in_app_doc_viewer.dart'; // ← in-app viewer (admin copy)
+import 'in_app_doc_viewer.dart';
 import 'upload_document_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════
 //  ADMIN SERVICE DETAIL SCREEN
-//  Fixes:
-//  • Responsive layout — no overflow on narrow screens
-//  • View Aadhaar opens IN-APP (image viewer / PDF viewer)
-//  • Upload Doc button shows success tick on card after upload
-//  • aadharUrl null-safe: checks each member map carefully
+//  Handles all service types including banquetHall (flat fields, no members)
 // ══════════════════════════════════════════════════════════════════════
 class AdminServiceDetailScreen extends StatelessWidget {
   final String userId;
@@ -30,7 +26,7 @@ class AdminServiceDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(serviceType.toUpperCase()),
+        title: Text(_labelFor(serviceType)),
         backgroundColor: AppColors.surface,
         elevation: 0,
         actions: [
@@ -44,7 +40,7 @@ class AdminServiceDetailScreen extends StatelessWidget {
                     userId: userId,
                     requestId: '${serviceType}_general',
                     type: serviceType,
-                    title: '${serviceType.toUpperCase()} Document',
+                    title: '${_labelFor(serviceType)} Document',
                   ),
                 ),
               ),
@@ -81,6 +77,7 @@ class AdminServiceDetailScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // ✅ Query service_requests collection, filter by userId + serviceType
         stream: FirebaseFirestore.instance
             .collection('service_requests')
             .where('userId', isEqualTo: userId)
@@ -114,7 +111,7 @@ class AdminServiceDetailScreen extends StatelessWidget {
                   Text('No requests found', style: AppTextStyles.headingSmall),
                   const SizedBox(height: 6),
                   Text(
-                    'No $serviceType requests from this member.',
+                    'No ${_labelFor(serviceType)} requests from this member.',
                     style: AppTextStyles.bodySmall,
                   ),
                 ],
@@ -137,16 +134,42 @@ class AdminServiceDetailScreen extends StatelessWidget {
       ),
     );
   }
+
+  static String _labelFor(String type) {
+    switch (type) {
+      case 'banquetHall':
+        return 'AC Banquet Hall';
+      case 'gym':
+        return 'Gym';
+      case 'swimming_pool':
+      case 'swimming':
+        return 'Swimming Pool';
+      case 'resortPass':
+      case 'resort_passes':
+        return 'Resort Passes';
+      case 'eventPass':
+      case 'event_passes':
+        return 'Event Passes';
+      case 'insurance':
+        return 'Insurance';
+      default:
+        return type.toUpperCase();
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  SERVICE REQUEST CARD
+//  Handles:
+//  • Member-based services (gym, pool, insurance, event/resort passes)
+//  • Banquet hall (flat fields: area, pincode, capacity, date)
 // ══════════════════════════════════════════════════════════════════
 class _ServiceRequestCard extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
   final String userId;
   final String serviceType;
+
   const _ServiceRequestCard({
     required this.docId,
     required this.data,
@@ -160,28 +183,40 @@ class _ServiceRequestCard extends StatefulWidget {
 
 class _ServiceRequestCardState extends State<_ServiceRequestCard> {
   bool _expanded = false;
-  bool _docUploaded = false; // ← shows tick after admin uploads doc
+  bool _docUploaded = false;
+
+  bool get _isBanquet => widget.serviceType == 'banquetHall';
 
   @override
   Widget build(BuildContext context) {
     final status = widget.data['status'] ?? 'pending';
+    final createdAt = widget.data['createdAt'] is Timestamp
+        ? (widget.data['createdAt'] as Timestamp).toDate()
+        : DateTime.now();
+
+    // ── Member-based fields ───────────────────────────────────────────────
     final members =
         (widget.data['members'] as List?)
             ?.map((m) => Map<String, dynamic>.from(m as Map))
             .toList() ??
+        (widget.data['passes'] as List?)
+            ?.map((m) => Map<String, dynamic>.from(m as Map))
+            .toList() ??
         [];
-    final adults = widget.data['adults'] ?? members.length;
-    final children = widget.data['children'] ?? 0;
-    final total = widget.data['totalMembers'] ?? members.length;
-    final createdAt = widget.data['createdAt'] is Timestamp
-        ? (widget.data['createdAt'] as Timestamp).toDate()
-        : DateTime.now();
+
+    // ── Banquet-specific fields ───────────────────────────────────────────
+    final area = widget.data['area'] as String? ?? '';
+    final pincode = widget.data['pincode'] as String? ?? '';
+    final capacity = widget.data['capacity'];
+    final eventDate = widget.data['date'] is Timestamp
+        ? (widget.data['date'] as Timestamp).toDate()
+        : null;
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ───────────────────────────────────────────────
+          // ── Header ───────────────────────────────────────────────────────
           Row(
             children: [
               Container(
@@ -191,8 +226,10 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                   color: AppColors.primarySurface,
                   borderRadius: AppRadius.small,
                 ),
-                child: const Icon(
-                  Icons.people_rounded,
+                child: Icon(
+                  _isBanquet
+                      ? Icons.meeting_room_rounded
+                      : Icons.people_rounded,
                   color: AppColors.primary,
                   size: 20,
                 ),
@@ -203,13 +240,15 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$total Member${total == 1 ? '' : 's'}',
+                      _isBanquet
+                          ? (area.isNotEmpty ? area : 'Banquet Request')
+                          : '${members.length} Member${members.length == 1 ? '' : 's'}',
                       style: AppTextStyles.headingSmall,
                     ),
                     Text(
-                      '${adults} adult${adults == 1 ? '' : 's'}'
-                      '${children > 0 ? ' + $children child${children == 1 ? '' : 'ren'}' : ''}'
-                      '  •  ${createdAt.day.toString().padLeft(2, '0')}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.year}',
+                      '${createdAt.day.toString().padLeft(2, '0')}-'
+                      '${createdAt.month.toString().padLeft(2, '0')}-'
+                      '${createdAt.year}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textHint,
                       ),
@@ -221,7 +260,7 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
             ],
           ),
 
-          // ── Doc uploaded confirmation ─────────────────────────────
+          // ── Doc uploaded confirmation ─────────────────────────────────────
           if (_docUploaded) ...[
             const SizedBox(height: 10),
             Container(
@@ -251,9 +290,25 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
             ),
           ],
 
-          // ── Expand members toggle ─────────────────────────────────
-          if (members.isNotEmpty) ...[
-            const SizedBox(height: 12),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: AppColors.divider),
+          const SizedBox(height: 12),
+
+          // ════════════════════════════════════════════════════
+          //  BANQUET HALL — flat detail view
+          // ════════════════════════════════════════════════════
+          if (_isBanquet) ...[
+            _BanquetDetails(
+              area: area,
+              pincode: pincode,
+              capacity: capacity?.toString() ?? '—',
+              eventDate: eventDate,
+            ),
+          ]
+          // ════════════════════════════════════════════════════
+          //  MEMBER-BASED SERVICES — expandable list
+          // ════════════════════════════════════════════════════
+          else if (members.isNotEmpty) ...[
             GestureDetector(
               onTap: () => setState(() => _expanded = !_expanded),
               child: Row(
@@ -281,12 +336,10 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
               const SizedBox(height: 12),
               const Divider(height: 1, color: AppColors.divider),
               const SizedBox(height: 12),
-
               ...members.asMap().entries.map((entry) {
                 final i = entry.key;
                 final m = entry.value;
                 final name = (m['name'] as String?) ?? '';
-                // ── NULL-SAFE: aadharUrl might not be present ──────
                 final aadharUrl = m['aadharUrl'] as String?;
                 final isChild = (m['isChild'] as bool?) ?? false;
 
@@ -319,7 +372,6 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                         ),
                       ),
                       const SizedBox(width: 10),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,8 +407,6 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                               ],
                             ),
                             const SizedBox(height: 6),
-
-                            // Aadhaar button — opens IN-APP
                             if (aadharUrl != null && aadharUrl.isNotEmpty)
                               GestureDetector(
                                 onTap: () => Navigator.push(
@@ -430,8 +480,7 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
           const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 12),
 
-          // ── Action buttons — responsive Column layout ─────────────
-          // Avoids RIGHT OVERFLOWED error when all 3 buttons present
+          // ── Action buttons ────────────────────────────────────────────────
           if (status == 'pending')
             _ActionButtons(
               onApprove: () async {
@@ -455,7 +504,8 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                       userId: widget.userId,
                       requestId: widget.docId,
                       type: widget.serviceType,
-                      title: '${widget.serviceType.toUpperCase()} Document',
+                      title:
+                          '${AdminServiceDetailScreen._labelFor(widget.serviceType)} Document',
                     ),
                   ),
                 );
@@ -463,7 +513,6 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
               },
             )
           else
-            // Already approved/rejected — only show Upload Doc
             AppOutlinedButton(
               label: 'Upload Document',
               icon: const Icon(
@@ -479,7 +528,8 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
                       userId: widget.userId,
                       requestId: widget.docId,
                       type: widget.serviceType,
-                      title: '${widget.serviceType.toUpperCase()} Document',
+                      title:
+                          '${AdminServiceDetailScreen._labelFor(widget.serviceType)} Document',
                     ),
                   ),
                 );
@@ -520,7 +570,91 @@ class _ServiceRequestCardState extends State<_ServiceRequestCard> {
   }
 }
 
-// ── 3-button layout — stacks vertically to prevent overflow ───────
+// ══════════════════════════════════════════════════════════════════
+//  BANQUET DETAIL WIDGET  — shows flat venue fields
+// ══════════════════════════════════════════════════════════════════
+class _BanquetDetails extends StatelessWidget {
+  final String area;
+  final String pincode;
+  final String capacity;
+  final DateTime? eventDate;
+
+  const _BanquetDetails({
+    required this.area,
+    required this.pincode,
+    required this.capacity,
+    required this.eventDate,
+  });
+
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String _fmt(DateTime dt) => '${dt.day} ${_months[dt.month - 1]} ${dt.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Row(icon: Icons.location_on_outlined, label: 'Area', value: area),
+        const SizedBox(height: 8),
+        _Row(icon: Icons.pin_drop_outlined, label: 'Pincode', value: pincode),
+        const SizedBox(height: 8),
+        _Row(
+          icon: Icons.people_rounded,
+          label: 'Capacity',
+          value: '$capacity persons',
+        ),
+        const SizedBox(height: 8),
+        _Row(
+          icon: Icons.calendar_month_rounded,
+          label: 'Event Date',
+          value: eventDate != null ? _fmt(eventDate!) : '—',
+        ),
+      ],
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _Row({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 16, color: AppColors.primary),
+      const SizedBox(width: 8),
+      Text(
+        '$label: ',
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+      ),
+      Expanded(
+        child: Text(
+          value,
+          style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
+    ],
+  );
+}
+
+// ── 3-button layout ───────────────────────────────────────────────
 class _ActionButtons extends StatelessWidget {
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -533,56 +667,12 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Use row if wide enough (> 340), else column
-        if (constraints.maxWidth > 320) {
-          return Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: AppButton(
-                      label: 'Approve',
-                      height: 42,
-                      icon: const Icon(
-                        Icons.check_rounded,
-                        color: Colors.white,
-                        size: 15,
-                      ),
-                      onTap: onApprove,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: AppOutlinedButton(
-                      label: 'Reject',
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: AppColors.error,
-                        size: 15,
-                      ),
-                      onTap: onReject,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              AppOutlinedButton(
-                label: 'Upload Document',
-                icon: const Icon(
-                  Icons.upload_file_rounded,
-                  color: AppColors.primary,
-                  size: 15,
-                ),
-                onTap: onUploadDoc,
-              ),
-            ],
-          );
-        } else {
-          return Column(
-            children: [
-              AppButton(
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
                 label: 'Approve',
                 height: 42,
                 icon: const Icon(
@@ -592,8 +682,10 @@ class _ActionButtons extends StatelessWidget {
                 ),
                 onTap: onApprove,
               ),
-              const SizedBox(height: 8),
-              AppOutlinedButton(
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AppOutlinedButton(
                 label: 'Reject',
                 icon: const Icon(
                   Icons.close_rounded,
@@ -602,20 +694,20 @@ class _ActionButtons extends StatelessWidget {
                 ),
                 onTap: onReject,
               ),
-              const SizedBox(height: 8),
-              AppOutlinedButton(
-                label: 'Upload Document',
-                icon: const Icon(
-                  Icons.upload_file_rounded,
-                  color: AppColors.primary,
-                  size: 15,
-                ),
-                onTap: onUploadDoc,
-              ),
-            ],
-          );
-        }
-      },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        AppOutlinedButton(
+          label: 'Upload Document',
+          icon: const Icon(
+            Icons.upload_file_rounded,
+            color: AppColors.primary,
+            size: 15,
+          ),
+          onTap: onUploadDoc,
+        ),
+      ],
     );
   }
 }

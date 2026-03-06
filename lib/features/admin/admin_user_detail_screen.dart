@@ -1,10 +1,10 @@
 import 'package:admin_app/features/admin/admin_service_detail_scree.dart';
 import 'package:admin_app/features/admin/edit_immunities_screen.dart';
+import 'package:admin_app/features/admin/hotel_request_detail_screen.dart';
 import 'package:admin_app/themes/app_theme.dart';
 import 'package:admin_app/themes/app_widgets.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../data/models/app_user.dart';
 import '../../../data/models/hotel_request.dart';
@@ -13,10 +13,9 @@ import 'upload_document_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════
 //  ADMIN USER DETAIL SCREEN
-//  • Compact info card (no big boxes)
-//  • Services as a list with name + basic status badge → tap to full detail
-//  • Hotel request cards with approve + upload doc button
-//  • Admin can upload doc → shows in user's Documents screen
+//  • Hotel requests shown as compact tappable rows → navigate to full detail
+//  • Service requests list → navigate to AdminServiceDetailScreen
+//  • View Aadhaar uses InAppDocViewer (not launchUrl)
 // ══════════════════════════════════════════════════════════════════════
 class AdminUserDetailScreen extends StatefulWidget {
   final String userId;
@@ -54,30 +53,26 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Not logged in warning ─────────────────────────
                 if (user.firebaseUid == null)
                   _WarningBanner(
                     message:
                         'User has not logged in yet — Firebase UID not generated.',
                   ),
 
-                // ── Member profile card ───────────────────────────
                 _ProfileCard(user: user),
                 const SizedBox(height: 20),
 
-                // ── Membership ────────────────────────────────────
                 const _SectionLabel('Membership'),
                 const SizedBox(height: 10),
                 _MembershipSection(user: user, isAdmin: true),
                 const SizedBox(height: 24),
 
-                // ── Holiday & Hotel Requests ──────────────────────
                 const _SectionLabel('Holiday & Hotel Requests'),
                 const SizedBox(height: 10),
+                // ✅ Now shows compact tappable cards → opens full detail screen
                 _HotelRequestsSection(user: user),
                 const SizedBox(height: 24),
 
-                // ── Service Requests list ─────────────────────────
                 const _SectionLabel('Service Requests'),
                 const SizedBox(height: 10),
                 _ServiceRequestsList(user: user),
@@ -90,7 +85,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   }
 }
 
-// ── Profile card ──────────────────────────────────────────────────
+// ── Profile card ──────────────────────────────────────────────────────────────
 class _ProfileCard extends StatelessWidget {
   final AppUser user;
   const _ProfileCard({required this.user});
@@ -100,7 +95,6 @@ class _ProfileCard extends StatelessWidget {
     return AppCard(
       child: Column(
         children: [
-          // Avatar + name row
           Row(
             children: [
               Container(
@@ -158,7 +152,6 @@ class _ProfileCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Status badge
               AppChip(
                 label: user.membershipActive == true ? 'ACTIVE' : 'INACTIVE',
                 bgColor: user.membershipActive == true
@@ -170,12 +163,9 @@ class _ProfileCard extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
           const Divider(color: AppColors.divider, height: 1),
           const SizedBox(height: 14),
-
-          // Info rows
           _IRow(icon: Icons.phone_outlined, label: user.phone ?? '—'),
           _IRow(
             icon: Icons.email_outlined,
@@ -224,7 +214,7 @@ class _IRow extends StatelessWidget {
   }
 }
 
-// ── Warning banner ────────────────────────────────────────────────
+// ── Warning banner ────────────────────────────────────────────────────────────
 class _WarningBanner extends StatelessWidget {
   final String message;
   const _WarningBanner({required this.message});
@@ -252,7 +242,7 @@ class _WarningBanner extends StatelessWidget {
   );
 }
 
-// ── Section label ─────────────────────────────────────────────────
+// ── Section label ─────────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -281,7 +271,7 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-// ── Status chip ───────────────────────────────────────────────────
+// ── Status chip ───────────────────────────────────────────────────────────────
 class _StatusChip extends StatelessWidget {
   final String status;
   const _StatusChip({required this.status});
@@ -306,10 +296,9 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-// ── Info row ──────────────────────────────────────────────────────
+// ── Info row ──────────────────────────────────────────────────────────────────
 class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
+  final String label, value;
   final bool isLast;
   const _InfoRow({
     required this.label,
@@ -342,7 +331,7 @@ class _InfoRow extends StatelessWidget {
   );
 }
 
-// ── Membership section (preserved from original) ──────────────────
+// ── Membership section ────────────────────────────────────────────────────────
 class _MembershipSection extends StatelessWidget {
   final AppUser user;
   final bool isAdmin;
@@ -382,6 +371,7 @@ class _MembershipSection extends StatelessWidget {
             Text('Facilities', style: AppTextStyles.labelUppercase),
             const SizedBox(height: 8),
             ...[
+              ('Holiday', user.immunities['holiday'] ?? false),
               ('Insurance', user.immunities['Insurance'] ?? false),
               ('Gym Access', user.immunities['gym'] ?? false),
               ('Swimming Pool', user.immunities['swimmingPool'] ?? false),
@@ -405,8 +395,6 @@ class _MembershipSection extends StatelessWidget {
                 ),
               ),
             ),
-
-            // Holiday balance
             const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 14),
@@ -428,7 +416,6 @@ class _MembershipSection extends StatelessWidget {
                 ),
               ],
             ),
-
             if (isAdmin) ...[
               const SizedBox(height: 16),
               AppButton(
@@ -496,9 +483,13 @@ class _MembershipSection extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
 //  HOTEL REQUESTS SECTION
-// ══════════════════════════════════════════════════════════════════
+//  ✅ Each request is a compact tappable row card
+//  ✅ Shows: location, sub-destination, status chip, date range, nights
+//  ✅ Shows Aadhaar badge if present
+//  ✅ Tap → AdminHotelRequestDetailScreen (full details + actions)
+// ══════════════════════════════════════════════════════════════════════
 class _HotelRequestsSection extends StatelessWidget {
   final AppUser user;
   const _HotelRequestsSection({required this.user});
@@ -540,162 +531,197 @@ class _HotelRequestsSection extends StatelessWidget {
               .map(
                 (r) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                r.location,
-                                style: AppTextStyles.headingSmall,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            _StatusChip(status: r.status),
-                          ],
+                  // ✅ Entire card is tappable → goes to detail screen
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AdminHotelRequestDetailScreen(
+                          request: r,
+                          userId: user.firebaseUid!,
                         ),
-                        if (r.subDestination.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            r.subDestination,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textHint,
-                            ),
+                      ),
+                    ),
+                    child: AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Header row ─────────────────────────────
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySurface,
+                                  borderRadius: AppRadius.small,
+                                ),
+                                child: const Icon(
+                                  Icons.beach_access_rounded,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      r.location,
+                                      style: AppTextStyles.headingSmall,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (r.subDestination.isNotEmpty)
+                                      Text(
+                                        r.subDestination,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.textHint,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              _StatusChip(status: r.status),
+                            ],
                           ),
-                        ],
-                        const SizedBox(height: 10),
-                        const Divider(height: 1),
-                        const SizedBox(height: 10),
 
-                        // Details grid (compact)
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 6,
-                          children: [
-                            _DetailChip(
-                              icon: Icons.calendar_today_rounded,
-                              label:
-                                  '${r.checkIn.toString().split(' ')[0]} → ${r.checkOut.toString().split(' ')[0]}',
-                            ),
-                            _DetailChip(
-                              icon: Icons.nights_stay_outlined,
-                              label: '${r.nights} nights',
-                            ),
-                            _DetailChip(
-                              icon: Icons.group_rounded,
-                              label: '${r.members} travellers',
-                            ),
-                            _DetailChip(
-                              icon: Icons.flight_rounded,
-                              label: r.travelMode,
-                            ),
-                            if (r.memberName.isNotEmpty)
-                              _DetailChip(
-                                icon: Icons.person_outline_rounded,
-                                label: r.memberName,
-                              ),
-                            if (r.adults > 0)
-                              _DetailChip(
-                                icon: Icons.person_rounded,
-                                label: '${r.adults} adults, ${r.kids} kids',
-                              ),
-                          ],
-                        ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: AppColors.divider),
+                          const SizedBox(height: 12),
 
-                        // Aadhaar view
-                        if (r.aadharUrl != null) ...[
+                          // ── Detail chips ────────────────────────────
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 6,
+                            children: [
+                              _DetailChip(
+                                icon: Icons.calendar_today_rounded,
+                                label:
+                                    '${r.checkIn.toString().split(' ')[0]} → ${r.checkOut.toString().split(' ')[0]}',
+                              ),
+                              _DetailChip(
+                                icon: Icons.nights_stay_outlined,
+                                label: '${r.nights} nights',
+                              ),
+                              _DetailChip(
+                                icon: Icons.group_rounded,
+                                label: '${r.members} travellers',
+                              ),
+                              _DetailChip(
+                                icon: Icons.flight_rounded,
+                                label: r.travelMode,
+                              ),
+                              if (r.memberName.isNotEmpty)
+                                _DetailChip(
+                                  icon: Icons.person_outline_rounded,
+                                  label: r.memberName,
+                                ),
+                              if (r.adults > 0)
+                                _DetailChip(
+                                  icon: Icons.person_rounded,
+                                  label: '${r.adults} adults, ${r.kids} kids',
+                                ),
+                            ],
+                          ),
+
+                          // ── Aadhaar badge + special request indicator
                           const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: () async {
-                              final uri = Uri.parse(r.aadharUrl!);
-                              if (await canLaunchUrl(uri))
-                                await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primarySurface,
-                                borderRadius: AppRadius.small,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.file_open_rounded,
-                                    color: AppColors.primary,
-                                    size: 15,
+                          Row(
+                            children: [
+                              // Aadhaar indicator
+                              if (r.aadharUrl != null &&
+                                  r.aadharUrl!.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                  const SizedBox(width: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySurface,
+                                    borderRadius: AppRadius.small,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.description_rounded,
+                                        color: AppColors.primary,
+                                        size: 13,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Aadhaar attached',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (r.aadharUrl != null &&
+                                  r.aadharUrl!.isNotEmpty)
+                                const SizedBox(width: 8),
+                              // Special request indicator
+                              if (r.specialRequest != null &&
+                                  r.specialRequest!.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentLight,
+                                    borderRadius: AppRadius.small,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: AppColors.accent,
+                                        size: 13,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Special request',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.accent,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              const Spacer(),
+                              // Tap hint
+                              Row(
+                                children: [
                                   Text(
-                                    'View Aadhaar',
+                                    'View details',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.primary,
                                       fontWeight: FontWeight.w600,
+                                      fontSize: 11,
                                     ),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: AppColors.primary,
+                                    size: 16,
                                   ),
                                 ],
                               ),
-                            ),
+                            ],
                           ),
                         ],
-
-                        const SizedBox(height: 14),
-
-                        // Actions
-                        Row(
-                          children: [
-                            if (r.status == 'pending')
-                              Expanded(
-                                child: AppButton(
-                                  label: 'Approve',
-                                  height: 40,
-                                  icon: const Icon(
-                                    Icons.check_rounded,
-                                    color: Colors.white,
-                                    size: 15,
-                                  ),
-                                  onTap: () async => FirestoreService.instance
-                                      .updateHotelRequestStatus(
-                                        r.id,
-                                        'approved',
-                                      ),
-                                ),
-                              ),
-                            if (r.status == 'pending') const SizedBox(width: 8),
-                            Expanded(
-                              child: AppOutlinedButton(
-                                label: 'Upload Doc',
-                                icon: const Icon(
-                                  Icons.upload_file_rounded,
-                                  color: AppColors.primary,
-                                  size: 15,
-                                ),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => UploadUserDocumentScreen(
-                                      userId: user.firebaseUid!,
-                                      requestId: r.id,
-                                      type: 'hotel',
-                                      title: 'Hotel Confirmation',
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -726,11 +752,10 @@ class _DetailChip extends StatelessWidget {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
 //  SERVICE REQUESTS LIST
-//  Each service shows as a row with live pending count badge
-//  Tap → AdminServiceDetailScreen
-// ══════════════════════════════════════════════════════════════════
+//  Each service row → AdminServiceDetailScreen
+// ══════════════════════════════════════════════════════════════════════
 class _ServiceRequestsList extends StatelessWidget {
   final AppUser user;
   const _ServiceRequestsList({required this.user});
@@ -751,7 +776,7 @@ class _ServiceRequestsList extends StatelessWidget {
     {
       'title': 'banquetHall',
       'label': 'Banquet Hall',
-      'icon': Icons.church_rounded,
+      'icon': Icons.meeting_room_rounded,
     },
     {'title': 'insurance', 'label': 'Insurance', 'icon': Icons.shield_rounded},
   ];
@@ -861,25 +886,17 @@ class _ServiceRow extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (total > 0)
-                            Text(
-                              '$total request${total == 1 ? '' : 's'}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textHint,
-                              ),
+                          Text(
+                            total > 0
+                                ? '$total request${total == 1 ? '' : 's'}'
+                                : 'No requests',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textHint,
                             ),
-                          if (total == 0)
-                            Text(
-                              'No requests',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textHint,
-                              ),
-                            ),
+                          ),
                         ],
                       ),
                     ),
-
-                    // Pending badge
                     if (pending > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -916,7 +933,6 @@ class _ServiceRow extends StatelessWidget {
                           ),
                         ),
                       ),
-
                     const SizedBox(width: 8),
                     const Icon(
                       Icons.chevron_right_rounded,

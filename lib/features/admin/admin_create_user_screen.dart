@@ -264,7 +264,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
 
       bool emailSuccess = false;
       try {
-        await _sendWelcomeEmail(toEmail: email, customUid: customUid);
+        await _sendWelcomeEmail(toEmail: email);
         emailSuccess = true;
       } catch (emailErr) {
         debugPrint('Email send error: $emailErr');
@@ -295,18 +295,13 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     }
   }
 
-  Future<void> _sendWelcomeEmail({
-    required String toEmail,
-    required String customUid,
-  }) async {
+  Future<void> _sendWelcomeEmail({required String toEmail}) async {
     // ── Configure your SMTP credentials here ──────────────────────────────
     // ⚠️  For production: use Firebase Cloud Functions or a backend API
     //     so credentials are never shipped inside the Flutter app.
     const String senderEmail = 'sukruth321@gmail.com'; // ← change
     const String senderPassword = 'ddrxmeuzqsmqneom'; // ← use App Password
     const String appName = 'Adventra Privilege';
-    const String appDownloadLink =
-        'https://yourapp.page.link/download'; // ← change
     // ─────────────────────────────────────────────────────────────────────
 
     final smtpServer = gmail(senderEmail, senderPassword);
@@ -314,13 +309,13 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     final message = Message()
       ..from = Address(senderEmail, appName)
       ..recipients.add(toEmail)
-      ..subject = '🎉 Welcome to $appName — Your Member ID'
-      ..html = _buildEmailHtml(customUid, appName, appDownloadLink);
+      ..subject = 'Welcome To the Family Of Adventra Privilege Services'
+      ..html = _buildEmailHtml(appName);
 
     await send(message, smtpServer);
   }
 
-  String _buildEmailHtml(String uid, String appName, String downloadLink) {
+  String _buildEmailHtml(String appName) {
     return '''
 <!DOCTYPE html>
 <html>
@@ -342,57 +337,28 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
               <h1 style="margin:8px 0 0;font-size:28px;color:#ffffff;letter-spacing:-0.5px;">$appName</h1>
             </td>
           </tr>
-
           <!-- Body -->
           <tr>
             <td style="padding:36px 40px;">
-              <p style="margin:0 0 8px;font-size:15px;color:#6B7280;">Hello,</p>
-              <p style="margin:0 0 28px;font-size:15px;color:#6B7280;line-height:1.6;">
-                Your membership account has been created! Here is your unique Member ID.
-                Please keep this safe — you will need it to log in to the app.
+              <p style="margin:0 0 8px;font-size:15px;color:#6B7280;"><strong>Welcome To the Family Of Adventra Privilege Services to</strong></p>
+              <p style="margin:0 0 24px;font-size:18px;color:#1A1A1A;font-weight:700;">Mr &amp; Mrs Pulluri Manideep &amp; V.Anudeepika</p>
+              <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">
+                Thank you For joining at Adventra Privilege Services LLP, We Believe in excellence in providing top of the line Holiday &amp; Real Estate services for our Valued customers.
               </p>
-
-              <!-- UID box -->
-              <div style="background:#E8F5F1;border:2px dashed #1A6B5A;border-radius:14px;padding:24px;text-align:center;margin-bottom:28px;">
-                <p style="margin:0 0 6px;font-size:12px;color:#1A6B5A;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">Your Member ID</p>
-                <p style="margin:0;font-size:34px;font-weight:700;color:#1A6B5A;letter-spacing:4px;">$uid</p>
-              </div>
-
-              <!-- Steps -->
-              <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#1A1A1A;">How to get started:</p>
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-                <tr>
-                  <td style="vertical-align:top;padding:0 14px 14px 0;">
-                    <div style="width:28px;height:28px;background:#1A6B5A;border-radius:8px;text-align:center;line-height:28px;color:#fff;font-weight:700;font-size:13px;">1</div>
-                  </td>
-                  <td style="vertical-align:top;padding-bottom:14px;">
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">Download the <strong>$appName</strong> app</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="vertical-align:top;padding:0 14px 14px 0;">
-                    <div style="width:28px;height:28px;background:#1A6B5A;border-radius:8px;text-align:center;line-height:28px;color:#fff;font-weight:700;font-size:13px;">2</div>
-                  </td>
-                  <td style="vertical-align:top;padding-bottom:14px;">
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">Enter your Member ID: <strong>$uid</strong></p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="vertical-align:top;padding:0 14px 0 0;">
-                    <div style="width:28px;height:28px;background:#1A6B5A;border-radius:8px;text-align:center;line-height:28px;color:#fff;font-weight:700;font-size:13px;">3</div>
-                  </td>
-                  <td style="vertical-align:top;">
-                    <p style="margin:4px 0 0;font-size:14px;color:#374151;">Start exploring your travel benefits!</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Download CTA -->
-              <div style="text-align:center;margin-bottom:8px;">
-                <a href="$downloadLink"
-                  style="display:inline-block;background:#FF8C42;color:#fff;text-decoration:none;padding:14px 36px;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
-                  📲 Download the App
-                </a>
+              <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">
+                Holidays can be avail anywhere in the world but request should be sent before 20 days for Domestic &amp; for international 30-45 days prior and maintenance will be applicable only when requested for more than ONE room i.e ( 9000 for domestic and 12000/- for International )
+              </p>
+              <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">
+                Any Further queries please send us Email to <a href="mailto:cc@adventraservices.com" style="color:#1A6B5A;text-decoration:none;">cc@adventraservices.com</a> or WhatsApp on 9381862483, Our Virtual Customer Care Team will Contact you within 24hours to resolve your queries.
+              </p>
+              <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+                Wishing you a very Happy Holidaying.....
+              </p>
+              <div style="padding-top:8px;border-top:1px solid #E5E7EB;">
+                <p style="margin:0;font-size:15px;color:#1A1A1A;line-height:1.6;">
+                  Thanks &amp; Regards,<br>
+                  Team Adventra Privilege Services LLP
+                </p>
               </div>
             </td>
           </tr>
@@ -588,3 +554,9 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     );
   }
 }
+
+
+
+
+
+
